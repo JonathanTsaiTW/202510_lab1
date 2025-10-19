@@ -29,6 +29,13 @@ const playerScoreDisplay = document.getElementById('playerScore');
 const computerScoreDisplay = document.getElementById('computerScore');
 const drawScoreDisplay = document.getElementById('drawScore');
 
+// 新增：玩家名稱 DOM
+const playerNameInput = document.getElementById ? document.getElementById('playerNameInput') : null;
+const saveNameBtn = document.getElementById ? document.getElementById('saveNameBtn') : null;
+
+// 新增：玩家名稱相關變數
+let playerName = '玩家';
+
 // 初始化遊戲
 function init() {
     cells.forEach(cell => {
@@ -38,6 +45,53 @@ function init() {
     resetScoreBtn.addEventListener('click', resetScore);
     difficultySelect.addEventListener('change', handleDifficultyChange);
     updateScoreDisplay();
+
+    // 載入並套用玩家名稱
+    loadPlayerNameFromCookie();
+    if (playerNameInput) {
+        playerNameInput.value = playerName;
+        // 按 Enter 也可儲存
+        playerNameInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                savePlayerName();
+            }
+        });
+    }
+    if (saveNameBtn) {
+        saveNameBtn.addEventListener('click', savePlayerName);
+    }
+}
+
+// 新增：cookie 輔助函式（輕量）
+function setCookie(name, value, days) {
+    const d = new Date();
+    d.setTime(d.getTime() + (days*24*60*60*1000));
+    document.cookie = `${name}=${encodeURIComponent(value)};path=/;expires=${d.toUTCString()};SameSite=Lax`;
+}
+function getCookie(name) {
+    const v = document.cookie.match('(^|;)\\s*' + name + '\\s*=\\s*([^;]+)');
+    return v ? decodeURIComponent(v.pop()) : null;
+}
+function eraseCookie(name) {
+    setCookie(name, '', -1);
+}
+
+// 新增：儲存/載入玩家名稱（使用 cookie，保存 365 天）
+const PLAYER_NAME_KEY = 'ttt_player_name';
+function savePlayerName() {
+    if (playerNameInput && playerNameInput.value.trim() !== '') {
+        playerName = playerNameInput.value.trim();
+    }
+    setCookie(PLAYER_NAME_KEY, playerName, 365);
+    updateStatus(); // 立即反映
+}
+function loadPlayerNameFromCookie() {
+    const n = getCookie(PLAYER_NAME_KEY);
+    if (n && n.trim() !== '') {
+        playerName = n;
+    } else {
+        playerName = '玩家';
+    }
 }
 
 // 新增不安全的評估函數
@@ -98,7 +152,7 @@ function makeMove(index, player) {
     }
 }
 
-// 檢查遊戲結果
+// 檢查遊戲結果（修改勝利分支以使用 playerName）
 function checkResult() {
     let roundWon = false;
     let winningCombination = null;
@@ -123,7 +177,7 @@ function checkResult() {
         
         if (winner === 'X') {
             playerScore++;
-            statusDisplay.textContent = '🎉 恭喜您獲勝！';
+            statusDisplay.textContent = `🎉 ${playerName} 獲勝！`;
         } else {
             computerScore++;
             statusDisplay.textContent = '😢 電腦獲勝！';
@@ -147,7 +201,7 @@ function checkResult() {
 function updateStatus() {
     if (gameActive) {
         if (currentPlayer === 'X') {
-            statusDisplay.textContent = '您是 X，輪到您下棋';
+            statusDisplay.textContent = `${playerName} (X)，輪到您下棋`;
         } else {
             statusDisplay.textContent = '電腦是 O，正在思考...';
         }
@@ -297,6 +351,7 @@ function resetScore() {
     drawScore = 0;
     updateScoreDisplay();
     resetGame();
+    // 不清除玩家名稱（保留 cookie），若想同時清除可額外呼叫 eraseCookie(PLAYER_NAME_KEY)
 }
 
 // 更新分數顯示
