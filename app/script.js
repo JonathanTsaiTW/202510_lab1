@@ -84,14 +84,59 @@ function savePlayerName() {
     }
     setCookie(PLAYER_NAME_KEY, playerName, 365);
     updateStatus(); // 立即反映
+
+    // 顯示儲存完成回饋
+    showSaveConfirmation();
 }
-function loadPlayerNameFromCookie() {
-    const n = getCookie(PLAYER_NAME_KEY);
-    if (n && n.trim() !== '') {
-        playerName = n;
-    } else {
-        playerName = '玩家';
+
+// 新增：在按下儲存後顯示明顯的設定完成訊息（短暫）
+function showSaveConfirmation() {
+    const btn = saveNameBtn || document.getElementById('saveNameBtn');
+    const input = playerNameInput || document.getElementById('playerNameInput');
+    const anchor = btn || input;
+    if (!anchor) return;
+
+    const msgId = 'saveNameMsg';
+    let msgEl = document.getElementById(msgId);
+    if (!msgEl) {
+        msgEl = document.createElement('span');
+        msgEl.id = msgId;
+        // 無須外部 CSS，使用內聯樣式做簡單、明顯的提示
+        msgEl.style.display = 'inline-block';
+        msgEl.style.marginLeft = '10px';
+        msgEl.style.padding = '6px 10px';
+        msgEl.style.backgroundColor = '#28a745';
+        msgEl.style.color = '#ffffff';
+        msgEl.style.borderRadius = '6px';
+        msgEl.style.fontWeight = '600';
+        msgEl.style.fontSize = '0.95rem';
+        msgEl.setAttribute('role', 'status');
+        msgEl.setAttribute('aria-live', 'polite');
+        anchor.parentNode.insertBefore(msgEl, anchor.nextSibling);
     }
+
+    // 按鈕文字與狀態切換
+    const originalBtnText = btn ? btn.textContent : null;
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = '已儲存 ✓';
+        btn.style.opacity = '0.9';
+    }
+
+    msgEl.textContent = '已儲存名稱';
+
+    // 2 秒後還原並移除提示
+    setTimeout(() => {
+        if (btn) {
+            btn.disabled = false;
+            if (originalBtnText !== null) btn.textContent = originalBtnText;
+            btn.style.opacity = '';
+        }
+        // 移除提示元素（或清空文字）
+        if (msgEl && msgEl.parentNode) {
+            msgEl.parentNode.removeChild(msgEl);
+        }
+    }, 2000);
 }
 
 // 新增不安全的評估函數
