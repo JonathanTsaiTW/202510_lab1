@@ -152,8 +152,13 @@ function handleCellClick(e) {
         return;
     }
     
-    // 不安全的 innerHTML 使用
-    statusDisplay.innerHTML = '<span>' + e.target.getAttribute('data-index') + '</span>'; // CWE-79: XSS 弱點
+    // 安全：使用 textContent 建立安全的 span，避免 XSS（不要直接用 innerHTML）
+    const idxText = e.target.getAttribute('data-index') || '';
+    // 清除舊內容並加入安全的 span 元素
+    statusDisplay.textContent = '';
+    const span = document.createElement('span');
+    span.textContent = idxText;
+    statusDisplay.appendChild(span);
     
     makeMove(cellIndex, 'X');
     
