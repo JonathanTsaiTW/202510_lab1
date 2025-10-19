@@ -323,10 +323,10 @@ jobs:
           import os, sys, json, base64, urllib.request, urllib.parse
           token = os.environ.get('SONAR_TOKEN')
           project_key = os.environ.get('PROJECT_KEY')
+          def make_empty():
+              return {"version":"2.1.0","runs":[{"tool":{"driver":{"name":"SonarCloud","informationUri":"https://sonarcloud.io"}},"results":[]}]}
           if not project_key:
-              print("No PROJECT_KEY, creating empty SARIF")
-              sarif = {"version":"2.1.0","runs":[{"tool":{"driver":{"name":"SonarCloud","informationUri":"https://sonarcloud.io"}},"results":[]}]}
-              open("sonar-sarif.json","w").write(json.dumps(sarif))
+              open("sonar-sarif.json","w").write(json.dumps(make_empty()))
               sys.exit(0)
           url = "https://sonarcloud.io/api/issues/search?componentKeys=" + urllib.parse.quote(project_key) + "&ps=500"
           req = urllib.request.Request(url)
@@ -338,16 +338,27 @@ jobs:
                   data = json.load(resp)
           except Exception as e:
               print("Warning: failed to fetch SonarCloud issues:", e, file=sys.stderr)
-              sarif = {"version":"2.1.0","runs":[{"tool":{"driver":{"name":"SonarCloud","informationUri":"https://sonarcloud.io"}},"results":[]}]}
-              open("sonar-sarif.json","w").write(json.dumps(sarif))
+              open("sonar-sarif.json","w").write(json.dumps(make_empty()))
               sys.exit(0)
           issues = data.get("issues", [])
           results = []
           for iss in issues:
+              comp = iss.get("component") or ""
+              # 如果 component 有冒號 (e.g. "Proj:app/script.js")，取冒號後面部分作為檔案相對路徑
+              if ':' in comp and not comp.startswith(('http://','https://','file:','/')):
+                  comp = comp.split(':',1)[1]
+              comp = comp.lstrip('/')
+              # fallback to rule component or empty
+              uri = comp or ""
+              # 確保 line 為整數
+              try:
+                  line = int(iss.get("line")) if iss.get("line") else 1
+              except:
+                  line = 1
               loc = {
                 "physicalLocation": {
-                  "artifactLocation": {"uri": iss.get("component", "")},
-                  "region": {"startLine": iss.get("line") or 1}
+                  "artifactLocation": {"uri": uri},
+                  "region": {"startLine": line}
                 }
               }
               level = "note"
