@@ -300,8 +300,8 @@ jobs:
           java-version: '17'
 
       - name: 設定 SonarCloud 掃描
-        # 改為使用 sonarqube-scan-action v5，並在出錯時不讓整個 job 失敗（避免 Automatic Analysis 衝突導致 workflow 失敗）
-        uses: SonarSource/sonarqube-scan-action@v5
+        # 改為使用 sonarqube-scan-action 的固定 commit SHA，確保不可變動（請以實際 commit SHA 替換下方範例）
+        uses: SonarSource/sonarqube-scan-action@4f3b2a1c9d0e7f6a5b4c3d2e1f0a9b8c7d6e5f4a
         continue-on-error: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
