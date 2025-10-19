@@ -315,23 +315,58 @@ jobs:
 
       - name: 將 SonarCloud 結果轉換為 SARIF
         if: always()
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          PROJECT_KEY: ${{ github.repository_owner }}_${{ github.event.repository.name }}
         run: |
-          # 安裝所需工具
-          npm install -g sonar-findings-export
-
-          # 從 SonarCloud 匯出掃描結果並轉換為 SARIF
-          sonar-findings-export \
-            --sonarqubeUrl=https://sonarcloud.io \
-            --sonarqubeToken=${{ secrets.SONAR_TOKEN }} \
-            --projectKey=${{ github.repository_owner }}_${{ github.event.repository.name }} \
-            --outputFormat=sarif \
-            --output=sonar-sarif.json || true
-
-          # 如果轉換失敗，建立空白 SARIF
-          if [ ! -f "sonar-sarif.json" ]; then
-            echo "警告：SARIF 轉換失敗，建立空白檔案"
-            echo '{"version":"2.1.0","runs":[{"tool":{"driver":{"name":"SonarCloud","rules":[]}},"results":[]}]}' > sonar-sarif.json
-          fi
+          python3 - <<'PY'
+          import os, sys, json, base64, urllib.request, urllib.parse
+          token = os.environ.get('SONAR_TOKEN')
+          project_key = os.environ.get('PROJECT_KEY')
+          if not project_key:
+              print("No PROJECT_KEY, creating empty SARIF")
+              sarif = {"version":"2.1.0","runs":[{"tool":{"driver":{"name":"SonarCloud","informationUri":"https://sonarcloud.io"}},"results":[]}]}
+              open("sonar-sarif.json","w").write(json.dumps(sarif))
+              sys.exit(0)
+          url = "https://sonarcloud.io/api/issues/search?componentKeys=" + urllib.parse.quote(project_key) + "&ps=500"
+          req = urllib.request.Request(url)
+          if token:
+              auth = base64.b64encode((token + ":").encode()).decode()
+              req.add_header("Authorization", "Basic " + auth)
+          try:
+              with urllib.request.urlopen(req, timeout=30) as resp:
+                  data = json.load(resp)
+          except Exception as e:
+              print("Warning: failed to fetch SonarCloud issues:", e, file=sys.stderr)
+              sarif = {"version":"2.1.0","runs":[{"tool":{"driver":{"name":"SonarCloud","informationUri":"https://sonarcloud.io"}},"results":[]}]}
+              open("sonar-sarif.json","w").write(json.dumps(sarif))
+              sys.exit(0)
+          issues = data.get("issues", [])
+          results = []
+          for iss in issues:
+              loc = {
+                "physicalLocation": {
+                  "artifactLocation": {"uri": iss.get("component", "")},
+                  "region": {"startLine": iss.get("line") or 1}
+                }
+              }
+              level = "note"
+              sev = (iss.get("severity") or "").upper()
+              if sev in ("BLOCKER","CRITICAL","MAJOR"):
+                  level = "error"
+              elif sev in ("MINOR","INFO"):
+                  level = "note"
+              r = {
+                "message": {"text": iss.get("message")},
+                "ruleId": iss.get("rule"),
+                "level": level,
+                "locations": [loc]
+              }
+              results.append(r)
+          sarif = {"version":"2.1.0","runs":[{"tool":{"driver":{"name":"SonarCloud","informationUri":"https://sonarcloud.io"}},"results":results}]}
+          open("sonar-sarif.json","w").write(json.dumps(sarif))
+          print(f"Wrote sonar-sarif.json with {len(results)} results")
+          PY
 
       - name: 上傳 SonarCloud SARIF 結果
         uses: github/codeql-action/upload-sarif@v3
