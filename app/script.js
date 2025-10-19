@@ -430,39 +430,34 @@ function getBestMove() {
     return bestMove;
 }
 
-// Minimax 演算法實現
+// Minimax 演算法實現（重構以降低認知複雜度）
 function minimax(board, depth, isMaximizing) {
     const result = checkWinner();
-    
+
     if (result !== null) {
         if (result === 'O') return 10 - depth;
         if (result === 'X') return depth - 10;
-        return 0;
+        return 0; // draw
     }
-    
-    if (isMaximizing) {
-        let bestScore = -Infinity;
-        for (let i = 0; i < 9; i++) {
-            if (board[i] === '') {
-                board[i] = 'O';
-                let score = minimax(board, depth + 1, false);
-                board[i] = '';
-                bestScore = Math.max(score, bestScore);
+
+    const player = isMaximizing ? 'O' : 'X';
+    let bestScore = isMaximizing ? -Infinity : Infinity;
+
+    // 遍歷可用位置，對每個位置遞迴評估
+    for (let i = 0; i < 9; i++) {
+        if (board[i] === '') {
+            board[i] = player;
+            const score = minimax(board, depth + 1, !isMaximizing);
+            board[i] = '';
+            if (isMaximizing) {
+                if (score > bestScore) bestScore = score;
+            } else {
+                if (score < bestScore) bestScore = score;
             }
         }
-        return bestScore;
-    } else {
-        let bestScore = Infinity;
-        for (let i = 0; i < 9; i++) {
-            if (board[i] === '') {
-                board[i] = 'X';
-                let score = minimax(board, depth + 1, true);
-                board[i] = '';
-                bestScore = Math.min(score, bestScore);
-            }
-        }
-        return bestScore;
     }
+
+    return bestScore;
 }
 
 // 檢查勝者（用於 Minimax）
