@@ -280,11 +280,75 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITLEAKS_ENABLE_SUMMARY: true
 
-  # 6. 安全掃描結果總結
+  # 6. SonarCloud 程式碼品質與安全檢測
+  sonarqube-scan:
+    runs-on: ubuntu-latest
+    name: SonarCloud 檢測
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Checkout 代碼
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 設定 JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: 設定 SonarCloud 掃描
+        uses: SonarSource/sonarcloud-github-action@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        with:
+          args: >
+            -Dsonar.organization=${{ github.repository_owner }}
+            -Dsonar.projectKey=${{ github.repository_owner }}_${{ github.event.repository.name }}
+            -Dsonar.sources=.
+
+      - name: 將 SonarCloud 結果轉換為 SARIF
+        if: always()
+        run: |
+          # 安裝所需工具
+          npm install -g sonar-findings-export
+
+          # 從 SonarCloud 匯出掃描結果並轉換為 SARIF
+          sonar-findings-export \
+            --sonarqubeUrl=https://sonarcloud.io \
+            --sonarqubeToken=${{ secrets.SONAR_TOKEN }} \
+            --projectKey=${{ github.repository_owner }}_${{ github.event.repository.name }} \
+            --outputFormat=sarif \
+            --output=sonar-sarif.json || true
+
+          # 如果轉換失敗，建立空白 SARIF
+          if [ ! -f "sonar-sarif.json" ]; then
+            echo "警告：SARIF 轉換失敗，建立空白檔案"
+            echo '{"version":"2.1.0","runs":[{"tool":{"driver":{"name":"SonarCloud","rules":[]}},"results":[]}]}' > sonar-sarif.json
+          fi
+
+      - name: 上傳 SonarCloud SARIF 結果
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: sonar-sarif.json
+          category: sonarcloud
+
+      - name: SonarCloud 品質閘道檢查
+        id: sonarqube-quality-gate-check
+        uses: sonarsource/sonarqube-quality-gate-action@master
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        timeout-minutes: 5
+
+  # 7. 安全掃描結果總結
   security-summary:
     runs-on: ubuntu-latest
     name: 安全掃描總結
-    needs: [sast-scan, sca-scan, container-scan, iac-scan, secret-scan]
+    needs: [sast-scan, sca-scan, container-scan, iac-scan, secret-scan, sonarqube-scan]
     if: always()
     outputs:
       all-passed: ${{ steps.check-status.outputs.all-passed }}
@@ -302,10 +366,12 @@ jobs:
           echo "3. 容器映像掃描 - Trivy: ${{ needs.container-scan.result }}"
           echo "4. IaC 安全檢查 - Checkov: ${{ needs.iac-scan.result }}"
           echo "5. Secret 掃描 - Gitleaks: ${{ needs.secret-scan.result }}"
+          echo "6. SonarQube 檢測: ${{ needs.sonarqube-scan.result }}"
           echo ""
           echo "📊 詳細結果請查看："
           echo "   - Security 標籤 → Code scanning alerts"
           echo "   - Actions 標籤 → 各個 Job 的詳細日誌"
+          echo "   - SonarQube 儀表板"
           echo ""
           
           # 檢查是否有失敗的 job
@@ -313,7 +379,8 @@ jobs:
              [[ "${{ needs.sca-scan.result }}" == "failure" ]] || \
              [[ "${{ needs.container-scan.result }}" == "failure" ]] || \
              [[ "${{ needs.iac-scan.result }}" == "failure" ]] || \
-             [[ "${{ needs.secret-scan.result }}" == "failure" ]]; then
+             [[ "${{ needs.secret-scan.result }}" == "failure" ]] || \
+             [[ "${{ needs.sonarqube-scan.result }}" == "failure" ]]; then
             echo "⚠️  警告：部分掃描發現問題，請檢查詳細報告"
             echo "all-passed=false" >> $GITHUB_OUTPUT
           else
@@ -321,7 +388,7 @@ jobs:
             echo "all-passed=true" >> $GITHUB_OUTPUT
           fi
 
-  # 7. 建置並推送 Docker Image 到 GitHub Container Registry
+  # 8. 建置並推送 Docker Image 到 GitHub Container Registry
   build-push-image:
     runs-on: ubuntu-latest
     name: 建置並推送 Docker Image
@@ -376,7 +443,7 @@ jobs:
           echo "🔗 查看 Package："
           echo "https://github.com/${{ github.repository }}/pkgs/container/$(basename ${{ github.repository }})"
 
-  # 8. 建置網站
+  # 9. 建置網站
   build:
     runs-on: ubuntu-latest
     name: 建置網站
@@ -394,7 +461,7 @@ jobs:
         with:
           path: './app'
 
-  # 9. 部署到 GitHub Pages
+  # 10. 部署到 GitHub Pages
   deploy:
     runs-on: ubuntu-latest
     name: 部署到 GitHub Pages
