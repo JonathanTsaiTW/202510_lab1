@@ -139,9 +139,111 @@ function showSaveConfirmation() {
     }, 2000);
 }
 
-// 新增不安全的評估函數
+// 安全的使用者輸入評估：只接受算術表達式（數字、小數、空白、()+-*/）並計算結果
 function evaluateUserInput(input) {
-    return eval(input); // CWE-95: 不安全的 eval 使用
+    if (typeof input !== 'string') return null;
+    const expr = input.trim();
+    if (expr.length === 0) return null;
+
+    // 驗證只包含允許的字元
+    if (!/^[0-9+\-*/().\s]+$/.test(expr)) {
+        // 含有不允許的字元，拒絕執行
+        return null;
+    }
+
+    // Tokenize
+    const tokens = [];
+    let i = 0;
+    while (i < expr.length) {
+        const ch = expr[i];
+        if (/\s/.test(ch)) { i++; continue; }
+        if (/[0-9.]/.test(ch)) {
+            let num = ch;
+            i++;
+            while (i < expr.length && /[0-9.]/.test(expr[i])) {
+                num += expr[i++];
+            }
+            tokens.push({type:'num', value: parseFloat(num)});
+            continue;
+        }
+        if (/[+\-*/()]/.test(ch)) {
+            tokens.push({type:'op', value: ch});
+            i++;
+            continue;
+        }
+        // 不可達：已被前面驗證過
+        return null;
+    }
+
+    // Shunting-yard: convert to RPN
+    const outQueue = [];
+    const opStack = [];
+    const prec = {'+':1,'-':1,'*':2,'/':2};
+    tokens.forEach(t => {
+        if (t.type === 'num') {
+            outQueue.push(t);
+        } else if (t.type === 'op') {
+            const v = t.value;
+            if (v === '(') {
+                opStack.push(v);
+            } else if (v === ')') {
+                while (opStack.length && opStack[opStack.length-1] !== '(') {
+                    outQueue.push({type:'op', value: opStack.pop()});
+                }
+                if (opStack.length === 0) {
+                    // mismatched parens
+                    throw new Error('Invalid expression: mismatched parentheses');
+                }
+                opStack.pop(); // pop '('
+            } else {
+                while (opStack.length) {
+                    const top = opStack[opStack.length-1];
+                    if (top === '(') break;
+                    const topPrec = prec[top];
+                    const curPrec = prec[v];
+                    if (topPrec >= curPrec) {
+                        outQueue.push({type:'op', value: opStack.pop()});
+                    } else break;
+                }
+                opStack.push(v);
+            }
+        }
+    });
+    while (opStack.length) {
+        const op = opStack.pop();
+        if (op === '(' || op === ')') {
+            throw new Error('Invalid expression: mismatched parentheses');
+        }
+        outQueue.push({type:'op', value: op});
+    }
+
+    // Evaluate RPN
+    const evalStack = [];
+    outQueue.forEach(t => {
+        if (t.type === 'num') {
+            evalStack.push(t.value);
+        } else if (t.type === 'op') {
+            if (evalStack.length < 2) {
+                throw new Error('Invalid expression');
+            }
+            const b = evalStack.pop();
+            const a = evalStack.pop();
+            let res;
+            switch (t.value) {
+                case '+': res = a + b; break;
+                case '-': res = a - b; break;
+                case '*': res = a * b; break;
+                case '/':
+                    if (b === 0) throw new Error('Division by zero');
+                    res = a / b; break;
+                default:
+                    throw new Error('Unsupported operator');
+            }
+            evalStack.push(res);
+        }
+    });
+    if (evalStack.length !== 1) throw new Error('Invalid expression evaluation');
+    return evalStack[0];
 }
 
 // 處理格子點擊
