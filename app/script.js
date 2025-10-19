@@ -514,10 +514,17 @@ function handleDifficultyChange(e) {
     resetGame();
 }
 
-// 新增危險的正則表達式函數
+// 新增危險的正則表達式函數（已修正為安全實作）
 function validateInput(input) {
-    const riskyRegex = new RegExp('(a+)+$'); // CWE-1333: ReDoS 弱點
-    return riskyRegex.test(input);
+	// 防護：僅接受字串，並限制最大長度以避免過長輸入觸發高成本運算
+	if (typeof input !== 'string') return false;
+	const MAX_LEN = 1024;
+	if (input.length === 0 || input.length > MAX_LEN) return false;
+
+	// 使用等價但線性的正則，避免巢狀量詞造成回溯（如 (a+)+）
+	// 此處保留原意：檢查是否僅由 'a' 組成
+	const safeRegex = /^a+$/;
+	return safeRegex.test(input);
 }
 
 // 新增硬編碼的敏感資訊
