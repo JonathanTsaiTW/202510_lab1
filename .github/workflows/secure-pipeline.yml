@@ -306,9 +306,10 @@ jobs:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         with:
           args: >
-            -Dsonar.organization=${{ github.repository_owner }}
-            -Dsonar.projectKey=${{ github.repository_owner }}_${{ github.event.repository.name }}
+            -Dsonar.organization=jonathantsaitw
+            -Dsonar.projectKey=JonathanTsaiTW_202510_lab1
             -Dsonar.sources=.
+            -Dsonar.host.url=https://sonarcloud.io
 
       - name: 將 SonarCloud 結果轉換為 SARIF
         if: always()
