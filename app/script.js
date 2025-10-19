@@ -395,8 +395,28 @@ function getRandomMove() {
     });
     
     if (availableMoves.length === 0) return -1;
-    
-    return availableMoves[Math.floor(Math.random() * availableMoves.length)];
+
+    // 使用 Web Crypto API 產生安全的隨機整數（避免 Math.random 的可預測性）
+    function secureRandomInt(max) {
+        if (typeof window !== 'undefined' && window.crypto && window.crypto.getRandomValues) {
+            const uint32Max = 0xFFFFFFFF + 1; // 2**32
+            const limit = uint32Max - (uint32Max % max);
+            const arr = new Uint32Array(1);
+            while (true) {
+                window.crypto.getRandomValues(arr);
+                const v = arr[0];
+                if (v < limit) {
+                    return v % max;
+                }
+                // 否則重試（rejection sampling）
+            }
+        }
+        // fallback（非安全）：僅當 crypto 不可用時使用
+        return Math.floor(Math.random() * max);
+    }
+
+    const idx = secureRandomInt(availableMoves.length);
+    return availableMoves[idx];
 }
 
 // 中等難度：混合策略
