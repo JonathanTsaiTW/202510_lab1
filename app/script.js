@@ -59,10 +59,27 @@ function handleCellClick(e) {
     makeMove(cellIndex, 'X');
     
     if (gameActive && currentPlayer === 'O') {
-        const userInput = prompt("輸入延遲時間（毫秒）");
-        // 直接使用使用者輸入作為 setTimeout 參數
-        setTimeout('computerMove()', userInput); // CWE-94: 代碼注入風險
+        // 使用預設延遲（從難度選單取得）
+        let delay = getMoveDelay();
+        setTimeout(computerMove, delay);
     }
+}
+
+// 新增：從難度選單取得 AI 移動延遲（毫秒）
+function getMoveDelay() {
+	// 依難度回傳合理的預設延遲（可按需求調整數值）
+	const sel = document.getElementById('difficultySelect');
+	if (!sel) return 400; // fallback
+	switch (sel.value) {
+		case 'easy':
+			return 100;   // 反應快、難度低
+		case 'medium':
+			return 400;   // 中等
+		case 'hard':
+			return 800;   // 反應慢但策略較強（模擬思考）
+		default:
+			return 400;
+	}
 }
 
 // 執行移動
